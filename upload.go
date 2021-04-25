@@ -12,7 +12,6 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/gabriel-vasile/mimetype"
 )
 
 type UploadFileParams struct {
@@ -21,6 +20,7 @@ type UploadFileParams struct {
 	Key                string
 	Metadata           map[string]*string
 	ContentDisposition string
+	ContentType        string
 	ACL                string
 }
 
@@ -39,9 +39,6 @@ func (client *Client) UploadFile(params UploadFileParams) (string, error) {
 		ACL:    aws.String("public-read"),
 		Body:   params.Data,
 	}
-	if mine, err := mimetype.DetectReader(params.Data); err == nil {
-		uploadParams.ContentType = aws.String(mine.String())
-	}
 
 	if params.ACL != "" {
 		uploadParams.ACL = aws.String(params.ACL)
@@ -50,9 +47,15 @@ func (client *Client) UploadFile(params UploadFileParams) (string, error) {
 	if params.ContentDisposition != "" {
 		uploadParams.ContentDisposition = aws.String(params.ContentDisposition)
 	}
+
+	if params.ContentType != "" {
+		uploadParams.ContentType = aws.String(params.ContentType)
+	}
+
 	if params.Metadata != nil {
 		uploadParams.Metadata = params.Metadata
 	}
+
 	result, err := svc.Upload(uploadParams)
 	if err != nil {
 		client.logger.Printf("Upload s3 err: %v\n", err)
@@ -64,14 +67,24 @@ func (client *Client) UploadFile(params UploadFileParams) (string, error) {
 }
 
 func (client *Client) UploadFiles(params []UploadFileParams) (result []string) {
-	var urlChannel = make(chan string, len(params))
 	var wg sync.WaitGroup
+	var max = len(params)
+	var urlChannel = make(chan string, max)
+	wg.Add(max)
+
 	for _, v := range params {
-		wg.Add(1)
-		go func(wg *sync.WaitGroup, param UploadFileParams, url chan string) {
-			defer wg.Done()
+		go func(wg *sync.WaitGroup, param UploadFileParams, channel chan string) {
+			defer func() {
+				wg.Done()
+				max--
+				if max == 0 {
+					close(channel)
+				}
+
+			}()
+
 			resp, _ := client.UploadFile(param)
-			url <- resp
+			channel <- resp
 		}(&wg, v, urlChannel)
 	}
 
@@ -91,7 +104,6 @@ func (client *Client) UploadFiles(params []UploadFileParams) (result []string) {
 	}()
 
 	wg.Wait()
-	close(urlChannel)
 
 	return
 }
@@ -110,17 +122,22 @@ func (client *Client) UploadLog(params UploadLogParams) ([]string, error) {
 
 	var ignoreFiles = params.IgnoreFiles
 	var err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if len(ignoreFiles) > 0 {
-			for _, ignoreFile := range ignoreFiles {
-				if info.IsDir() && !strings.Contains(path, ignoreFile) && info.Size() > 0 {
-					files = append(files, path)
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() && info.Size() > 0 {
+			if len(ignoreFiles) > 0 {
+				for _, ignoreFile := range ignoreFiles {
+					if !strings.Contains(path, ignoreFile) {
+						files = append(files, path)
+					}
 				}
-			}
-		} else {
-			if !info.IsDir() && info.Size() > 0 {
+			} else {
 				files = append(files, path)
 			}
 		}
+
 		return nil
 	})
 	if err != nil {
@@ -133,16 +150,25 @@ func (client *Client) UploadLog(params UploadLogParams) ([]string, error) {
 	}
 
 	var wg sync.WaitGroup
-	var urlChannel = make(chan string, len(files))
+	var max = len(files)
+	var urlChannel = make(chan string, max)
+	wg.Add(max)
 
 	for _, file := range files {
-		wg.Add(1)
-		go func(wg *sync.WaitGroup, file string, url chan string) {
-			defer wg.Done()
+		go func(wg *sync.WaitGroup, file string, channel chan string) {
+			defer func() {
+				wg.Done()
+				max--
+				if max == 0 {
+					close(channel)
+				}
+
+			}()
+
 			originFile, err := os.Open(file)
 			if err != nil {
 				client.logger.Printf("Open file: error %+v\n", err)
-				urlChannel <- ""
+				channel <- ""
 				return
 			}
 
@@ -166,7 +192,11 @@ func (client *Client) UploadLog(params UploadLogParams) ([]string, error) {
 				Bucket: params.UploadToBucket,
 				Key:    key,
 			})
-			urlChannel <- result
+			channel <- result
+
+			if !params.KeepFileAfterUpload && result != "" {
+				os.Remove(file)
+			}
 		}(&wg, file, urlChannel)
 	}
 
