@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
@@ -22,6 +23,8 @@ type UploadFileParams struct {
 	ContentDisposition string
 	ContentType        string
 	ACL                string
+	CacheControl       *string
+	CacheExpires       *time.Time
 }
 
 func (client *Client) UploadFile(params UploadFileParams) (string, error) {
@@ -34,10 +37,12 @@ func (client *Client) UploadFile(params UploadFileParams) (string, error) {
 	var svc = s3manager.NewUploader(s)
 
 	var uploadParams = &s3manager.UploadInput{
-		Bucket: aws.String(params.Bucket),
-		Key:    aws.String(params.Key),
-		ACL:    aws.String("public-read"),
-		Body:   params.Data,
+		Bucket:       aws.String(params.Bucket),
+		Key:          aws.String(params.Key),
+		ACL:          aws.String("public-read"),
+		Body:         params.Data,
+		CacheControl: params.CacheControl,
+		Expires:      params.CacheExpires,
 	}
 
 	if params.ACL != "" {
