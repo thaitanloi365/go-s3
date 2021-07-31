@@ -40,3 +40,13 @@ func (client *Client) CheckFile(bucket, key string) (string, error) {
 
 	return url, nil
 }
+
+func contains(list []string, value string) bool {
+	for _, v := range list {
+		if v == value {
+			return true
+		}
+	}
+
+	return false
+}

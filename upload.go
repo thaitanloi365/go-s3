@@ -117,7 +117,7 @@ type UploadLogParams struct {
 	IgnoreFiles         []string
 	FolderToUpload      string
 	UploadToBucket      string
-	KeepFileAfterUpload bool
+	KeepFileAfterUpload []string
 }
 
 func (client *Client) UploadLog(params UploadLogParams) ([]string, error) {
@@ -199,7 +199,7 @@ func (client *Client) UploadLog(params UploadLogParams) ([]string, error) {
 			})
 			channel <- result
 
-			if !params.KeepFileAfterUpload && result != "" {
+			if result != "" && !contains(params.KeepFileAfterUpload, file) {
 				os.Remove(file)
 			}
 		}(&wg, file, urlChannel)
