@@ -114,10 +114,10 @@ func (client *Client) UploadFiles(params []UploadFileParams) (result []string) {
 }
 
 type UploadLogParams struct {
-	IgnoreFiles         []string
-	FolderToUpload      string
-	UploadToBucket      string
-	KeepFileAfterUpload []string
+	IgnoreFiles               []string
+	FolderToUpload            string
+	UploadToBucket            string
+	ShouldKeepFileAfterUpload func(filePath string) bool
 }
 
 func (client *Client) UploadLog(params UploadLogParams) ([]string, error) {
@@ -199,8 +199,11 @@ func (client *Client) UploadLog(params UploadLogParams) ([]string, error) {
 			})
 			channel <- result
 
-			if result != "" && !contains(params.KeepFileAfterUpload, file) {
-				os.Remove(file)
+			if result != "" {
+				if params.ShouldKeepFileAfterUpload != nil && params.ShouldKeepFileAfterUpload(file) {
+					os.Remove(file)
+
+				}
 			}
 		}(&wg, file, urlChannel)
 	}
