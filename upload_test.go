@@ -29,6 +29,16 @@ func TestUploadFile(t *testing.T) {
 	fmt.Println("url", url)
 }
 
+func TestFileKey(t *testing.T) {
+	var files = []string{
+		"/app/logs/2006-01-02",
+		"/app/logs/2006-02-02",
+	}
+	for _, file := range files {
+		key, name := extractFileKey(file)
+		fmt.Printf("file=%s key=%v name=%v\n", file, key, name)
+	}
+}
 func TestUploadFiles(t *testing.T) {
 	file, err := os.Open("go.png")
 	assert.NoError(t, err)

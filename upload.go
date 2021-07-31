@@ -185,13 +185,8 @@ func (client *Client) UploadLog(params UploadLogParams) ([]string, error) {
 				gw.Close()
 				writer.Close()
 			}()
-			var ext = path.Ext(file)
-			var fileName = file[0 : len(file)-len(ext)]
-			var gzipFileName = fmt.Sprintf("%s.gz", fileName)
-			var fileKey = filepath.Base(gzipFileName)
-			var folder = filepath.Dir(file)
-			var key = fmt.Sprintf("%s/%s", folder, fileKey)
 
+			key, fileName := extractFileKey(file)
 			result, _ := client.UploadFile(UploadFileParams{
 				Data:   reader,
 				Bucket: params.UploadToBucket,
@@ -226,4 +221,16 @@ func (client *Client) UploadLog(params UploadLogParams) ([]string, error) {
 	wg.Wait()
 
 	return response, nil
+}
+
+func extractFileKey(file string) (key string, name string) {
+	var ext = path.Ext(file)
+	var fileName = file[0 : len(file)-len(ext)]
+	var gzipFileName = fmt.Sprintf("%s.gz", fileName)
+	var fileKey = filepath.Base(gzipFileName)
+	var folder = filepath.Dir(file)
+	key = fmt.Sprintf("%s/%s", folder, fileKey)
+
+	name = filepath.Base(file)
+	return
 }
