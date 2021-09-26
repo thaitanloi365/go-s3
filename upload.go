@@ -195,7 +195,7 @@ func (client *Client) UploadLog(params UploadLogParams) ([]string, error) {
 			channel <- result
 
 			if result != "" {
-				if params.ShouldKeepFileAfterUpload != nil && params.ShouldKeepFileAfterUpload(key, fileName) {
+				if params.ShouldKeepFileAfterUpload != nil && !params.ShouldKeepFileAfterUpload(key, fileName) {
 					os.Remove(file)
 
 				}
