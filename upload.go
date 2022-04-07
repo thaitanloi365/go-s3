@@ -134,7 +134,7 @@ func (client *Client) UploadLog(params UploadLogParams) ([]string, error) {
 		if !info.IsDir() && info.Size() > 0 {
 			if len(ignoreFiles) > 0 {
 				for _, ignoreFile := range ignoreFiles {
-					if !strings.Contains(path, ignoreFile) {
+					if !strings.ContainsAny(path, ignoreFile) {
 						files = append(files, path)
 					}
 				}
