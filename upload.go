@@ -2,8 +2,10 @@ package s3
 
 import (
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -120,21 +122,22 @@ type UploadLogParams struct {
 	ShouldKeepFileAfterUpload func(filePath, fileName string) bool
 }
 
-func (client *Client) UploadLog(params UploadLogParams) ([]string, error) {
-	var response = []string{}
+func (client *Client) GetLogFiles(params UploadLogParams) ([]string, error) {
 	var files []string
 	var dir = params.FolderToUpload
-
 	var ignoreFiles = params.IgnoreFiles
 	var err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			log.Fatalf("Read file error=%+v", err)
 			return err
 		}
 
-		if !info.IsDir() && info.Size() > 0 {
+		fmt.Println("path", path, info.IsDir(), info.Size())
+
+		if !info.IsDir() {
 			if len(ignoreFiles) > 0 {
 				for _, ignoreFile := range ignoreFiles {
-					if !strings.ContainsAny(path, ignoreFile) {
+					if !strings.Contains(path, ignoreFile) {
 						files = append(files, path)
 					}
 				}
@@ -145,18 +148,23 @@ func (client *Client) UploadLog(params UploadLogParams) ([]string, error) {
 
 		return nil
 	})
+
+	return files, err
+}
+func (client *Client) UploadLog(params UploadLogParams) ([]string, error) {
+	files, err := client.GetLogFiles(params)
 	if err != nil {
-		return response, err
+		return nil, err
 	}
 
 	if len(files) == 0 {
-		client.logger.Printf("No have any files to upload\n")
-		return response, nil
+		return nil, errors.New("no have any files to upload")
 	}
 
 	var wg sync.WaitGroup
 	var max = len(files)
 	var urlChannel = make(chan string, max)
+	var uploadedURLs []string
 	wg.Add(max)
 
 	for _, file := range files {
@@ -210,7 +218,7 @@ func (client *Client) UploadLog(params UploadLogParams) ([]string, error) {
 			value, more := <-urlChannel
 			if more {
 				if value != "" {
-					response = append(response, value)
+					uploadedURLs = append(uploadedURLs, value)
 				}
 			} else {
 				return
@@ -220,7 +228,7 @@ func (client *Client) UploadLog(params UploadLogParams) ([]string, error) {
 
 	wg.Wait()
 
-	return response, nil
+	return files, nil
 }
 
 func extractFileKey(file string) (key string, name string) {
