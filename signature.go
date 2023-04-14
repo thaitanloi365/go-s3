@@ -7,6 +7,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"time"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 const policyDocument = `
@@ -103,6 +107,37 @@ func (client *Client) GenerateSignature(params GenerateSignatureParams) Signatur
 		ContentType: params.ContentType,
 	}
 
+}
+
+func (client *Client) GetS3SignedURL(params GenerateSignatureParams) string {
+	sess, err := session.NewSession()
+	if err != nil {
+		return ""
+	}
+
+	var obj = &s3.PutObjectInput{
+		Bucket: aws.String(params.Bucket),
+		Key:    aws.String(params.Key),
+	}
+
+	if params.ACL != "" {
+		obj.ACL = aws.String(params.ACL)
+	}
+
+	if params.ContentType != "" {
+		obj.ContentType = aws.String(params.ContentType)
+	}
+
+	r, _ := s3.New(sess).PutObjectRequest(obj)
+
+	// Create the pre-signed url with an expiry
+	url, err := r.Presign(time.Duration(params.ExpiryMinutes) * time.Minute)
+	if err != nil {
+		client.logger.Printf("Failed to generate a pre-signed url: ", err)
+		return ""
+	}
+
+	return url
 }
 
 func makeHmac(key []byte, data []byte) []byte {
